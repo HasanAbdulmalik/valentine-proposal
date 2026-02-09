@@ -1,16 +1,14 @@
-// Remove the broken imports
-// import { Hands } from "@mediapipe/hands"; 
-// import { Camera } from "@mediapipe/camera_utils";
+// NOTE: No imports here! We use window.Hands and window.Camera
 
 export const setupGestureRecognition = (videoElement, canvasElement, onGesture) => {
   const ctx = canvasElement.getContext('2d');
 
-  // THE FIX: Use the global variables loaded from index.html
+  // Grab the globals from index.html
   const Hands = window.Hands;
   const Camera = window.Camera;
 
   if (!Hands || !Camera) {
-      console.error("MediaPipe not loaded yet!");
+      console.error("MediaPipe failed to load. Check index.html");
       return;
   }
 
@@ -27,19 +25,11 @@ export const setupGestureRecognition = (videoElement, canvasElement, onGesture) 
 
   hands.onResults((results) => {
     ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
     if (results.multiHandLandmarks.length > 0) {
       const landmarks = results.multiHandLandmarks[0];
-      
-      // 1. Draw Skeleton
       drawSkeleton(ctx, landmarks, canvasElement.width, canvasElement.height);
-      
-      // 2. Detect Gesture
       const gesture = detectGesture(landmarks);
-      if (gesture) {
-          // console.log("Detected:", gesture); 
-          onGesture(gesture);
-      }
+      if (gesture) onGesture(gesture);
     }
   });
 
@@ -85,48 +75,34 @@ const drawSkeleton = (ctx, landmarks, width, height) => {
   }
 };
 
-// --- GEOMETRY-BASED GESTURE LOGIC ---
+// --- GESTURE LOGIC ---
 const detectGesture = (landmarks) => {
   const thumbTip = landmarks[4];
-  const thumbIP = landmarks[3]; 
   const thumbMCP = landmarks[2]; 
-
   const indexTip = landmarks[8];
   const indexMCP = landmarks[5]; 
-  
   const middleTip = landmarks[12];
   const middleMCP = landmarks[9];
-
   const ringTip = landmarks[16];
   const ringMCP = landmarks[13];
-
   const pinkyTip = landmarks[20];
   const pinkyMCP = landmarks[17];
-  
   const wrist = landmarks[0];
 
   const dist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
-
   const isIndexOpen = dist(indexTip, wrist) > dist(indexMCP, wrist);
   const isMiddleOpen = dist(middleTip, wrist) > dist(middleMCP, wrist);
   const isRingOpen = dist(ringTip, wrist) > dist(ringMCP, wrist);
   const isPinkyOpen = dist(pinkyTip, wrist) > dist(pinkyMCP, wrist);
 
-  // 1. THUMBS UP/DOWN
   if (!isIndexOpen && !isMiddleOpen && !isRingOpen && !isPinkyOpen) {
       if (thumbTip.y < thumbMCP.y - 0.05) return "THUMBS_UP";
       if (thumbTip.y > thumbMCP.y + 0.05) return "THUMBS_DOWN";
       return "FIST"; 
   }
-
-  // 2. VICTORY
   if (isIndexOpen && isMiddleOpen && !isRingOpen && !isPinkyOpen) return "VICTORY";
-
-  // 3. OK SIGN
   const distThumbIndex = dist(thumbTip, indexTip);
   if (distThumbIndex < 0.05 && isMiddleOpen && isRingOpen) return "OK";
-
-  // 4. OPEN PALM
   if (isIndexOpen && isMiddleOpen && isRingOpen && isPinkyOpen) return "OPEN";
 
   return null;
