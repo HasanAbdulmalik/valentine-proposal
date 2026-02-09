@@ -1,17 +1,28 @@
-// NOTE: No imports here! We use window.Hands and window.Camera
+// NOTE: We do NOT use the MediaPipe Camera utility anymore.
+// We use a manual loop which is much more reliable for React.
 
-export const setupGestureRecognition = (videoElement, canvasElement, onGesture) => {
+export const setupGestureRecognition = async (videoElement, canvasElement, onGesture) => {
   const ctx = canvasElement.getContext('2d');
 
-  // Grab the globals from index.html
-  const Hands = window.Hands;
-  const Camera = window.Camera;
+  // 1. WAIT FOR SCRIPTS TO LOAD
+  // We loop until window.Hands is available from the CDN
+  const waitForMediaPipe = () => {
+    return new Promise((resolve) => {
+      const check = () => {
+        if (window.Hands) {
+          resolve(window.Hands);
+        } else {
+          setTimeout(check, 100); // Check again in 100ms
+        }
+      };
+      check();
+    });
+  };
 
-  if (!Hands || !Camera) {
-      console.error("MediaPipe failed to load. Check index.html");
-      return;
-  }
+  const Hands = await waitForMediaPipe();
+  console.log("MediaPipe Hands Loaded!"); // Debug success
 
+  // 2. SETUP MEDIAPIPE
   const hands = new Hands({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
   });
@@ -27,26 +38,53 @@ export const setupGestureRecognition = (videoElement, canvasElement, onGesture) 
     ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     if (results.multiHandLandmarks.length > 0) {
       const landmarks = results.multiHandLandmarks[0];
+      
+      // Draw and Detect
       drawSkeleton(ctx, landmarks, canvasElement.width, canvasElement.height);
       const gesture = detectGesture(landmarks);
       if (gesture) onGesture(gesture);
     }
   });
 
-  const camera = new Camera(videoElement, {
-    onFrame: async () => {
-      if (videoElement.readyState >= 2) {
+  // 3. START WEBCAM MANUALLY (The reliable way)
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: 640,
+        height: 480,
+        facingMode: "user" // Use front camera
+      }
+    });
+
+    videoElement.srcObject = stream;
+    
+    // Wait for video to be ready before starting detection loop
+    videoElement.onloadeddata = () => {
+      videoElement.play();
+      startDetectionLoop();
+    };
+
+  } catch (err) {
+    console.error("Error accessing webcam:", err);
+    alert("Please allow camera access!");
+  }
+
+  // 4. DETECTION LOOP
+  const startDetectionLoop = () => {
+    const loop = async () => {
+      // Only send data if video is playing and ready
+      if (videoElement.readyState === 4) {
+        // Sync canvas size to video size
         canvasElement.width = videoElement.videoWidth;
         canvasElement.height = videoElement.videoHeight;
+        
         await hands.send({ image: videoElement });
       }
-    },
-    width: 640,
-    height: 480,
-  });
-
-  camera.start();
-  return camera;
+      // Request next frame
+      requestAnimationFrame(loop);
+    };
+    loop();
+  };
 };
 
 // --- DRAWING ---
