@@ -1,8 +1,18 @@
-import { Hands } from "@mediapipe/hands";
-import { Camera } from "@mediapipe/camera_utils";
+// Remove the broken imports
+// import { Hands } from "@mediapipe/hands"; 
+// import { Camera } from "@mediapipe/camera_utils";
 
 export const setupGestureRecognition = (videoElement, canvasElement, onGesture) => {
   const ctx = canvasElement.getContext('2d');
+
+  // THE FIX: Use the global variables loaded from index.html
+  const Hands = window.Hands;
+  const Camera = window.Camera;
+
+  if (!Hands || !Camera) {
+      console.error("MediaPipe not loaded yet!");
+      return;
+  }
 
   const hands = new Hands({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
@@ -12,7 +22,7 @@ export const setupGestureRecognition = (videoElement, canvasElement, onGesture) 
     maxNumHands: 1,
     modelComplexity: 1,
     minDetectionConfidence: 0.7,
-    minTrackingConfidence: 0.5, // Lowered slightly for faster tracking
+    minTrackingConfidence: 0.5,
   });
 
   hands.onResults((results) => {
@@ -27,7 +37,7 @@ export const setupGestureRecognition = (videoElement, canvasElement, onGesture) 
       // 2. Detect Gesture
       const gesture = detectGesture(landmarks);
       if (gesture) {
-          console.log("Detected:", gesture); // Debugging help
+          // console.log("Detected:", gesture); 
           onGesture(gesture);
       }
     }
@@ -75,14 +85,14 @@ const drawSkeleton = (ctx, landmarks, width, height) => {
   }
 };
 
-// --- GEOMETRY-BASED GESTURE LOGIC (Rotation Proof) ---
+// --- GEOMETRY-BASED GESTURE LOGIC ---
 const detectGesture = (landmarks) => {
   const thumbTip = landmarks[4];
-  const thumbIP = landmarks[3]; // Thumb knuckle
-  const thumbMCP = landmarks[2]; // Thumb base
+  const thumbIP = landmarks[3]; 
+  const thumbMCP = landmarks[2]; 
 
   const indexTip = landmarks[8];
-  const indexMCP = landmarks[5]; // Index knuckle
+  const indexMCP = landmarks[5]; 
   
   const middleTip = landmarks[12];
   const middleMCP = landmarks[9];
@@ -95,36 +105,28 @@ const detectGesture = (landmarks) => {
   
   const wrist = landmarks[0];
 
-  // HELPER: Calculate distance between two points
   const dist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
 
-  // LOGIC: A finger is "OPEN" if the Tip is further from the Wrist than the Knuckle (MCP) is.
-  // This works even if your hand is upside down or tilted.
   const isIndexOpen = dist(indexTip, wrist) > dist(indexMCP, wrist);
   const isMiddleOpen = dist(middleTip, wrist) > dist(middleMCP, wrist);
   const isRingOpen = dist(ringTip, wrist) > dist(ringMCP, wrist);
   const isPinkyOpen = dist(pinkyTip, wrist) > dist(pinkyMCP, wrist);
 
-  // --- 1. THUMBS UP/DOWN ---
-  // (Strict check: 4 Fingers must be curled/closed)
+  // 1. THUMBS UP/DOWN
   if (!isIndexOpen && !isMiddleOpen && !isRingOpen && !isPinkyOpen) {
-      // Check Thumb direction relative to its own knuckle
-      // We use Y coordinates here because Up/Down is directional
       if (thumbTip.y < thumbMCP.y - 0.05) return "THUMBS_UP";
       if (thumbTip.y > thumbMCP.y + 0.05) return "THUMBS_DOWN";
-      
-      // If thumb is neither strongly up nor down, it's just a...
       return "FIST"; 
   }
 
-  // --- 2. VICTORY (Reset) ---
+  // 2. VICTORY
   if (isIndexOpen && isMiddleOpen && !isRingOpen && !isPinkyOpen) return "VICTORY";
 
-  // --- 3. OK SIGN ---
+  // 3. OK SIGN
   const distThumbIndex = dist(thumbTip, indexTip);
   if (distThumbIndex < 0.05 && isMiddleOpen && isRingOpen) return "OK";
 
-  // --- 4. OPEN PALM ---
+  // 4. OPEN PALM
   if (isIndexOpen && isMiddleOpen && isRingOpen && isPinkyOpen) return "OPEN";
 
   return null;
