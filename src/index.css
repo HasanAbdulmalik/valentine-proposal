@@ -1,0 +1,74 @@
+:root {
+  font-family: 'Courier New', monospace;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  background-color: #000000;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
+
+.camera-feed {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 200px;
+  height: 150px;
+  border: 2px solid #ff007f;
+  border-radius: 10px;
+  transform: scaleX(-1); /* Mirror effect */
+  z-index: 100;
+  box-shadow: 0 0 15px rgba(255, 0, 127, 0.5);
+}
+
+.feedback-container {
+  position: absolute;
+  bottom: 50px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.feedback-text {
+  color: #ff007f;
+  font-size: 2rem;
+  font-weight: bold;
+  text-shadow: 0 0 10px #ff007f, 0 0 20px #ff007f;
+  margin-bottom: 20px;
+}
+
+.love-letter {
+  background: rgba(0, 0, 0, 0.85);
+  border: 2px solid #ff007f;
+  padding: 30px;
+  border-radius: 15px;
+  max-width: 600px;
+  margin: 0 auto;
+  pointer-events: auto;
+  box-shadow: 0 0 30px rgba(255, 0, 127, 0.4);
+}
+
+.love-letter p {
+  color: white;
+  font-family: 'Georgia', serif;
+  font-size: 1.2rem;
+  white-space: pre-line;
+}

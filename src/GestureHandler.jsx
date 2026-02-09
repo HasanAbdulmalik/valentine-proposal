@@ -1,0 +1,131 @@
+import { Hands } from "@mediapipe/hands";
+import { Camera } from "@mediapipe/camera_utils";
+
+export const setupGestureRecognition = (videoElement, canvasElement, onGesture) => {
+  const ctx = canvasElement.getContext('2d');
+
+  const hands = new Hands({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+  });
+
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.5, // Lowered slightly for faster tracking
+  });
+
+  hands.onResults((results) => {
+    ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+    if (results.multiHandLandmarks.length > 0) {
+      const landmarks = results.multiHandLandmarks[0];
+      
+      // 1. Draw Skeleton
+      drawSkeleton(ctx, landmarks, canvasElement.width, canvasElement.height);
+      
+      // 2. Detect Gesture
+      const gesture = detectGesture(landmarks);
+      if (gesture) {
+          console.log("Detected:", gesture); // Debugging help
+          onGesture(gesture);
+      }
+    }
+  });
+
+  const camera = new Camera(videoElement, {
+    onFrame: async () => {
+      if (videoElement.readyState >= 2) {
+        canvasElement.width = videoElement.videoWidth;
+        canvasElement.height = videoElement.videoHeight;
+        await hands.send({ image: videoElement });
+      }
+    },
+    width: 640,
+    height: 480,
+  });
+
+  camera.start();
+  return camera;
+};
+
+// --- DRAWING ---
+const drawSkeleton = (ctx, landmarks, width, height) => {
+  ctx.strokeStyle = "#00FF00"; 
+  ctx.lineWidth = 2;
+  const getPoint = (index) => ({ x: landmarks[index].x * width, y: landmarks[index].y * height });
+
+  const connections = [[0,1], [1,2], [2,3], [3,4], [0,5], [5,6], [6,7], [7,8], [0,9], [9,10], [10,11], [11,12], [0,13], [13,14], [14,15], [15,16], [0,17], [17,18], [18,19], [19,20]];
+
+  connections.forEach(([start, end]) => {
+    const p1 = getPoint(start);
+    const p2 = getPoint(end);
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+  });
+
+  ctx.fillStyle = "#FF0000"; 
+  for (let i = 0; i < 21; i++) {
+    const p = getPoint(i);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI); 
+    ctx.fill();
+  }
+};
+
+// --- GEOMETRY-BASED GESTURE LOGIC (Rotation Proof) ---
+const detectGesture = (landmarks) => {
+  const thumbTip = landmarks[4];
+  const thumbIP = landmarks[3]; // Thumb knuckle
+  const thumbMCP = landmarks[2]; // Thumb base
+
+  const indexTip = landmarks[8];
+  const indexMCP = landmarks[5]; // Index knuckle
+  
+  const middleTip = landmarks[12];
+  const middleMCP = landmarks[9];
+
+  const ringTip = landmarks[16];
+  const ringMCP = landmarks[13];
+
+  const pinkyTip = landmarks[20];
+  const pinkyMCP = landmarks[17];
+  
+  const wrist = landmarks[0];
+
+  // HELPER: Calculate distance between two points
+  const dist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
+
+  // LOGIC: A finger is "OPEN" if the Tip is further from the Wrist than the Knuckle (MCP) is.
+  // This works even if your hand is upside down or tilted.
+  const isIndexOpen = dist(indexTip, wrist) > dist(indexMCP, wrist);
+  const isMiddleOpen = dist(middleTip, wrist) > dist(middleMCP, wrist);
+  const isRingOpen = dist(ringTip, wrist) > dist(ringMCP, wrist);
+  const isPinkyOpen = dist(pinkyTip, wrist) > dist(pinkyMCP, wrist);
+
+  // --- 1. THUMBS UP/DOWN ---
+  // (Strict check: 4 Fingers must be curled/closed)
+  if (!isIndexOpen && !isMiddleOpen && !isRingOpen && !isPinkyOpen) {
+      // Check Thumb direction relative to its own knuckle
+      // We use Y coordinates here because Up/Down is directional
+      if (thumbTip.y < thumbMCP.y - 0.05) return "THUMBS_UP";
+      if (thumbTip.y > thumbMCP.y + 0.05) return "THUMBS_DOWN";
+      
+      // If thumb is neither strongly up nor down, it's just a...
+      return "FIST"; 
+  }
+
+  // --- 2. VICTORY (Reset) ---
+  if (isIndexOpen && isMiddleOpen && !isRingOpen && !isPinkyOpen) return "VICTORY";
+
+  // --- 3. OK SIGN ---
+  const distThumbIndex = dist(thumbTip, indexTip);
+  if (distThumbIndex < 0.05 && isMiddleOpen && isRingOpen) return "OK";
+
+  // --- 4. OPEN PALM ---
+  if (isIndexOpen && isMiddleOpen && isRingOpen && isPinkyOpen) return "OPEN";
+
+  return null;
+};
